@@ -113,7 +113,7 @@ if __name__ == "__main__":
     for key, func in METRIC_MAP.items():
         try:
             (value, clock) = func(DC_PREFIX, item_dict)
-            print(f"facility,country_code={os.environ.get("TAG_COUNTRY_CODE")},facility_id={os.environ.get("TAG_FACILITY_ID")} {key}={value} {int(clock)*10**9}")
+            print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
         except KeyError:
             #print(f"Key {key} not found")
             pass
