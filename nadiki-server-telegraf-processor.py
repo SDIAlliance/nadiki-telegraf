@@ -83,9 +83,12 @@ for line in fileinput.input():
         last_ts2 = ts
 
     elif measurement == "nvidia_smi":
-        power_draw[ts] = fields["power_draw"]
+        if power_draw.get(ts) == None:
+            power_draw[ts] = 0
+        # we have more than one GPU, so we need to sum up the power draw with the same timestamp
+        power_draw[ts] += fields["power_draw"]
         #print(last_ts2, instantaneous_power_reading)
-        if last_ts3 != None:
+        if last_ts3 != None and last_ts3 != ts:
             diff = (int(ts) - int(last_ts3)) / 10**9
             # fraction of an hour between the last two points
             fraction = diff / SECONDS_PER_HOUR
@@ -94,7 +97,7 @@ for line in fileinput.input():
             joules = float(power_draw[last_ts3])*fraction*JOULES_PER_KWH
             print(f"server,country_code={tags['country_code']},facility_id={tags['facility_id']},rack_id={tags['rack_id']},server_id={tags['server_id']} gpu_energy_consumption_joules={joules} {last_ts3}")
             del(power_draw[last_ts3])
-        last_ts3 = ts
+            last_ts3 = ts
 
 
 
