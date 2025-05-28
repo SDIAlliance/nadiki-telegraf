@@ -29,12 +29,17 @@ def parse_line(line):
 columns = ["measurement", "tags", "fields", "timestamp"]
 data = []
 
-def dump_metrics():
-    if data.length > 0:
+def dump_metrics(a,b):
+    global columns
+    global data
+    print("alarm!", file=sys.stderr)
+    if len(data) > 0:
         print(json.dumps({ "columns": columns, "data": data }), file=sys.stderr)
         data = []
+    signal.alarm(1)
 
 signal.signal(signal.SIGALRM, dump_metrics)
+signal.alarm(1)
 
 if __name__ == "__main__":
     for line in fileinput.input():
