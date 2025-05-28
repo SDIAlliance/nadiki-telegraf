@@ -1,6 +1,11 @@
 from flask import Flask, request
 import json
 import subprocess
+import os
+import sys
+
+if os.getuid() != 0:
+    sys.exit("This process must be run as root in order to use crictl!")
 
 app = Flask(__name__)
 
@@ -16,7 +21,8 @@ def index():
 
     # call crictl and get all containers
     #cp = subprocess.run(["cat", "crictl-ps.json"], capture_output=True)   
-    cp = subprocess.run(["crictl", "-o", "json"], capture_output=True)   
+    cp = subprocess.run(["crictl", "ps", "-o", "json"], capture_output=True)
+    print(cp.stderr)
     containers = json.loads(cp.stdout)
     # create a translation table from pod (sandbox) ID to a dictionary of labels
     # (we assume that most of the time, all running pods will be requested though
