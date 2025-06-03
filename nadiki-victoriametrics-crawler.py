@@ -23,13 +23,7 @@ class VMQuery:
         response.raise_for_status()
         return response.text
 
-def signal_handler(a,b):
-#    pprint.pprint(last_timestamp)
-    vmq = VMQuery(os.environ.get("VICTORIA_METRICS_URL"))
-    r = vmq.query(os.environ.get("VICTORIA_METRICS_METRIC"))
-    for line in r.split("\n"):
-        if not line.strip(): # ignore empty lines
-            continue
+    def process_data_point(self, line):
         data_point = json.loads(line)
         timestamp = data_point["timestamps"][0]
 #        # only consider lines newer than the last one seen
@@ -39,10 +33,33 @@ def signal_handler(a,b):
 #                continue
 #        except:
 #            pass
-        tag_string = ",".join([f"{k}={data_point['metric'][k]}" for k in data_point["metric"]])
-        field_string = f"value={data_point['values'][0]}"
+
         last_timestamp[f'{data_point["metric"]["__name__"]}/{data_point["metric"]["instance"]}'] = timestamp
-        print(f"{os.environ.get('VICTORIA_METRICS_METRIC')},{tag_string} {field_string} {timestamp}000000")
+
+        # remove the __name__ tag because we use this as field name anyway
+        metricname = data_point["metric"]["__name__"]
+        del(data_point["metric"]["__name__"])
+
+        tag_string = ",".join([f"{k}={data_point['metric'][k]}" for k in data_point["metric"]])
+        field_string = f"{metricname}={data_point['values'][0]}"
+        return f"server,{tag_string} {field_string} {timestamp}000000"
+
+
+def signal_handler(a,b):
+#    pprint.pprint(last_timestamp)
+    vmq = VMQuery(os.environ.get("VICTORIA_METRICS_URL"))
+    metrics = []
+    if os.environ.get("VICTORIA_METRICS_METRIC") != None:
+        metrics.append(os.environ.get("VICTORIA_METRICS_METRIC"))
+    if os.environ.get("VICTORIA_METRICS_METRICS") != None:
+        metrics.extend(os.environ.get("VICTORIA_METRICS_METRICS").split(","))
+
+    for metric in metrics:
+        r = vmq.query(metric)
+        for line in r.split("\n"):
+            if not line.strip(): # ignore empty lines
+                continue
+            print(vmq.process_data_point(line))
 
 def main():
     signal.signal(signal.SIGHUP, signal_handler)
