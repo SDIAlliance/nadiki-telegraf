@@ -36,13 +36,13 @@ class VMQuery:
 
         last_timestamp[f'{data_point["metric"]["__name__"]}/{data_point["metric"]["instance"]}'] = timestamp
 
-        # remove the __name__ tag because we use this as field name anyway
+        # remove the __name__ tag because we use this as measurement name anyway
         metricname = data_point["metric"]["__name__"]
         del(data_point["metric"]["__name__"])
 
         tag_string = ",".join([f"{k}={data_point['metric'][k]}" for k in data_point["metric"]])
-        field_string = f"{metricname}={data_point['values'][0]}"
-        return f"server,{tag_string} {field_string} {timestamp}000000"
+        field_string = f"value={data_point['values'][0]}"
+        return f"{metricname},{tag_string} {field_string} {timestamp}000000"
 
 
 def signal_handler(a,b):
