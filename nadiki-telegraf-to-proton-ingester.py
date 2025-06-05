@@ -23,7 +23,20 @@ STREAM_CONFIG = {
 }
 
 QUERIES = [
-    "SELECT * FROM ipmi_dcmi_power_consumption_watts"
+    # Calculate server_energy_consumption_kwh by multiplying Watts with the fraction of an hour which lies between two data points (and then dividing though 1000 to get the kilos)
+    """
+        SELECT
+        'server', tags, map_cast(['server_energy_consumption_kwh'], [((date_diff('s', t2, t1) / 3600) * watts) / 1000]) AS fields, to_unix_timestamp64_milli(t1)
+        FROM
+        (
+            SELECT
+            instance, tags, to_float(fields['value']) AS watts, _tp_time AS t1, lag(_tp_time) OVER (PARTITION BY instance) AS t2
+            FROM
+            ipmi_dcmi_power_consumption_watts
+        )
+        WHERE
+        (t1 != t2) AND (date_diff('s', t2, t1) < 86400)
+    """
 ]
 
 def parse_line(line):
@@ -78,7 +91,7 @@ if __name__ == "__main__":
             c = client.Client(host='127.0.0.1', port=8463)
             rows = c.execute_iter(q)
             for row in rows:
-                (measurement, tags, fields, timestamp, ts) = row
+                (measurement, tags, fields, timestamp) = row
                 tag_strings = [f"{tagname}={tags[tagname]}" for tagname in tags.keys()]
                 field_strings = [f"{fieldname}={fields[fieldname]}" for fieldname in fields.keys()]
                 print(f"{measurement},{','.join(tag_strings)} {'.'.join(field_strings)} {timestamp}")
