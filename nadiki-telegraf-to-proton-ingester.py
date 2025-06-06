@@ -15,7 +15,7 @@ import os
 from proton_driver import client
 import datetime
 
-PROTON_INGEST_URL = "http://localhost:3218/proton/v1/ingest/streams/"
+PROTON_INGEST_URL = f"http://{os.environ.get('PROTON_HOST')}:3218/proton/v1/ingest/streams/"
 
 # this should go to a config file
 STREAM_CONFIG = {
@@ -74,7 +74,7 @@ def dump_metrics(a,b):
 
 if __name__ == "__main__":
     # create the streams
-    c = client.Client(host='127.0.0.1', port=8463)
+    c = client.Client(host=os.environ.get('PROTON_HOST'), port=8463)
     for s in STREAM_CONFIG:
         c.execute(f"DROP STREAM IF EXISTS {s}")
         create_stmt = f"CREATE STREAM {s} (" \
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     for q in QUERIES:
         if os.fork() > 0:
             # child process queries proton and outputs metrics
-            c = client.Client(host='127.0.0.1', port=8463)
+            c = client.Client(host=os.environ.get('PROTON_HOST'), port=8463)
             rows = c.execute_iter(q)
             for row in rows:
                 (measurement, tags, fields, timestamp) = row
