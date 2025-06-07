@@ -19,7 +19,8 @@ PROTON_INGEST_URL = f"http://{os.environ.get('PROTON_HOST')}:3218/proton/v1/inge
 
 # this should go to a config file
 STREAM_CONFIG = {
-    "ipmi_dcmi_power_consumption_watts": ["instance"]
+    "ipmi_dcmi_power_consumption_watts": ["instance"],
+    "node_cpu_seconds_total": ["instance", "cpu", "mode"]
 }
 
 QUERIES = [
@@ -36,6 +37,22 @@ QUERIES = [
         )
         WHERE
         (t1 != t2) AND (date_diff('s', t2, t1) < 86400)
+    """,
+    # Calculate fraction of time (between 0 and 1) in which CPU cores were non-idle
+    """
+        SELECT
+        'server', tags, map_cast(['cpu_not_idle_fraction'], [sum(seconds-last_seconds)/date_diff('s', t2, t1)]) as fields, to_unix_timestamp64_milli(t1)
+        FROM
+        (
+            SELECT
+            tags, to_float(fields['value']) as seconds, lag(to_float(fields['value'])) over (partition by instance, cpu, mode) as last_seconds, _tp_time as t1, lag(_tp_time) over (partition by instance, cpu, mode) as t2
+            FROM
+            node_cpu_seconds_total
+            WHERE
+            mode != 'idle'
+        )
+        where
+        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) group by tags, t2, t1
     """
 ]
 
@@ -66,7 +83,7 @@ def dump_metrics(a,b):
             headers = {"Content-Type": "application/json"}
             columns = STREAM_CONFIG[k] + ["tags", "fields", "timestamp", "_tp_time"]
             payload = { "columns": columns, "data": data[k] }
-            #print(json.dumps(payload), file=sys.stderr)
+            print(json.dumps(payload), file=open("debug.json", "w"))
             response = requests.post(f"{PROTON_INGEST_URL}{k}", headers=headers, json=payload)
             response.raise_for_status()
             data[k] = []
@@ -107,4 +124,4 @@ if __name__ == "__main__":
         data.setdefault(measurement, [])
         #print(f"tags={tags}, k={STREAM_CONFIG[measurement]}", file=sys.stderr)
         pkey_values = [tags[k] for k in STREAM_CONFIG[measurement]]
-        data[measurement].append([pkey_values, tags, fields, ts, datetime.datetime.fromtimestamp(int(ts)/10**9).strftime("%F %T.%f")])
+        data[measurement].append(pkey_values + [tags, fields, ts, datetime.datetime.fromtimestamp(int(ts)/10**9).strftime("%F %T.%f")])
