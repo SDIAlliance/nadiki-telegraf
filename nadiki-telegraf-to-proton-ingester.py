@@ -28,14 +28,16 @@ STREAM_CONFIG = {
     "node_network_transmit_packets_total":  ["instance", "device"],
     "node_network_receive_packets_total":   ["instance", "device"],
     "node_disk_read_bytes_total":           ["instance", "device"],
-    "node_disk_written_bytes_total":        ["instance", "device"]
+    "node_disk_written_bytes_total":        ["instance", "device"],
+    "node_disk_reads_completed_total":      ["instance", "device"],
+    "node_disk_writes_completed_total":     ["instance", "device"]
 }
 
 QUERIES = [
     # Calculate server_energy_consumption_kwh by multiplying Watts with the fraction of an hour which lies between two data points (and then dividing though 1000 to get the kilos)
     """
         SELECT
-        'server', tags, map_cast(['server_energy_consumption_kwh'], [((date_diff('s', t2, t1) / 3600) * watts) / 1000]) AS fields, to_unix_timestamp64_milli(t1)
+        'server', tags, map_cast(['server_energy_consumption_kwh'], [((date_diff('s', t2, t1) / 3600) * watts) / 1000]) AS fields, to_unix_timestamp64_nano(t1)
         FROM
         (
             SELECT
@@ -49,7 +51,7 @@ QUERIES = [
     # Calculate fraction of time (between 0 and 1) in which CPU cores were non-idle
     """
         SELECT
-        'server', tags, map_cast(['cpu_not_idle_fraction'], [sum(seconds-last_seconds)/date_diff('s', t2, t1)]) as fields, to_unix_timestamp64_milli(t1)
+        'server', tags, map_cast(['cpu_not_idle_fraction'], [sum(seconds-last_seconds)/date_diff('s', t2, t1)]) as fields, to_unix_timestamp64_nano(t1)
         FROM
         (
             SELECT
@@ -69,7 +71,7 @@ QUERIES.extend([
     ##
     f"""
         SELECT
-        'server', tags, map_cast(['network_{transmit_receive}_{bytes_packets}'], [sum(units-last_units)]) as fields, to_unix_timestamp64_milli(t1)
+        'server', tags, map_cast(['network_{transmit_receive}_{bytes_packets}'], [sum(units-last_units)]) as fields, to_unix_timestamp64_nano(t1)
         FROM
         (
             SELECT
@@ -83,10 +85,10 @@ QUERIES.extend([
     for (transmit_receive, bytes_packets) in itertools.product(["transmit", "receive"], ["bytes", "packets"])])
 
 QUERIES.extend([
-    ##
+    ## number of bytes read and written
     f"""
         SELECT
-        'server', tags, map_cast(['io_bytes_{read_written}'], [sum(units-last_units)]) as fields, to_unix_timestamp64_milli(t1)
+        'server', tags, map_cast(['io_bytes_{read_written}'], [sum(units-last_units)]) as fields, to_unix_timestamp64_nano(t1)
         FROM
         (
             SELECT
@@ -98,6 +100,23 @@ QUERIES.extend([
         (t1 != t2) AND (date_diff('s', t2, t1) < 86400) GROUP BY tags, t2, t1
     """
     for (read_written) in ["read", "written"]])
+
+QUERIES.extend([
+    ## number of reads and writes completed
+    f"""
+        SELECT
+        'server', tags, map_cast(['io_{reads_writes}'], [sum(units-last_units)]) as fields, to_unix_timestamp64_nano(t1)
+        FROM
+        (
+            SELECT
+            tags, to_float(fields['value']) as units, lag(to_float(fields['value'])) over (partition by instance, device) as last_units, _tp_time as t1, lag(_tp_time) over (partition by instance, device) as t2
+            FROM
+            node_disk_{reads_writes}_completed_total
+        )
+        WHERE
+        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) GROUP BY tags, t2, t1
+    """
+    for (reads_writes) in ["reads", "writes"]])
 
 
 def parse_line(line):
@@ -119,15 +138,15 @@ data = {} # will contain one key per metric with an array of parsed lines as val
 
 def dump_metrics(a,b):
     global data
-    print("alarm!", file=sys.stderr)
+    #print("alarm!", file=sys.stderr)
     for k in data.keys():
-        print(f"{k} has {len(data[k])} entries", file=sys.stderr)
+        #print(f"{k} has {len(data[k])} entries", file=sys.stderr)
         if len(data[k]) > 0:
             #print(json.dumps({ "columns": columns, "data": data }), file=sys.stderr)
             headers = {"Content-Type": "application/json"}
             columns = STREAM_CONFIG[k] + ["tags", "fields", "timestamp", "_tp_time"]
             payload = { "columns": columns, "data": data[k] }
-            print(json.dumps(payload), file=open("debug.json", "w"))
+            #print(json.dumps(payload), file=open("debug.json", "w"))
             response = requests.post(f"{PROTON_INGEST_URL}{k}", headers=headers, json=payload)
             response.raise_for_status()
             data[k] = []
@@ -168,4 +187,4 @@ if __name__ == "__main__":
         data.setdefault(measurement, [])
         #print(f"tags={tags}, k={STREAM_CONFIG[measurement]}", file=sys.stderr)
         pkey_values = [tags[k] for k in STREAM_CONFIG[measurement]]
-        data[measurement].append(pkey_values + [tags, fields, ts, datetime.datetime.fromtimestamp(int(ts)/10**9).strftime("%F %T.%f")])
+        data[measurement].append(pkey_values + [tags, fields, ts, datetime.datetime.fromtimestamp(int(ts)/10**9, datetime.timezone.utc).strftime("%F %T.%f")])
