@@ -14,13 +14,21 @@ import requests
 import os
 from proton_driver import client
 import datetime
+import itertools
 
 PROTON_INGEST_URL = f"http://{os.environ.get('PROTON_HOST')}:3218/proton/v1/ingest/streams/"
 
+# primary keys of our streams
 # this should go to a config file
 STREAM_CONFIG = {
-    "ipmi_dcmi_power_consumption_watts": ["instance"],
-    "node_cpu_seconds_total": ["instance", "cpu", "mode"]
+    "ipmi_dcmi_power_consumption_watts":    ["instance"],
+    "node_cpu_seconds_total":               ["instance", "cpu", "mode"],
+    "node_network_transmit_bytes_total":    ["instance", "device"],
+    "node_network_receive_bytes_total":     ["instance", "device"],
+    "node_network_transmit_packets_total":  ["instance", "device"],
+    "node_network_receive_packets_total":   ["instance", "device"],
+    "node_disk_read_bytes_total":           ["instance", "device"],
+    "node_disk_written_bytes_total":        ["instance", "device"]
 }
 
 QUERIES = [
@@ -51,10 +59,46 @@ QUERIES = [
             WHERE
             mode != 'idle'
         )
-        where
-        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) group by tags, t2, t1
+        WHERE
+        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) GROUP BY tags, t2, t1
     """
 ]
+
+# generate queries which are very similar (network and disk)
+QUERIES.extend([
+    ##
+    f"""
+        SELECT
+        'server', tags, map_cast(['network_{transmit_receive}_{bytes_packets}'], [sum(units-last_units)]) as fields, to_unix_timestamp64_milli(t1)
+        FROM
+        (
+            SELECT
+            tags, to_float(fields['value']) as units, lag(to_float(fields['value'])) over (partition by instance, device) as last_units, _tp_time as t1, lag(_tp_time) over (partition by instance, device) as t2
+            FROM
+            node_network_{transmit_receive}_{bytes_packets}_total
+        )
+        WHERE
+        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) GROUP BY tags, t2, t1
+    """
+    for (transmit_receive, bytes_packets) in itertools.product(["transmit", "receive"], ["bytes", "packets"])])
+
+QUERIES.extend([
+    ##
+    f"""
+        SELECT
+        'server', tags, map_cast(['io_bytes_{read_written}'], [sum(units-last_units)]) as fields, to_unix_timestamp64_milli(t1)
+        FROM
+        (
+            SELECT
+            tags, to_float(fields['value']) as units, lag(to_float(fields['value'])) over (partition by instance, device) as last_units, _tp_time as t1, lag(_tp_time) over (partition by instance, device) as t2
+            FROM
+            node_disk_{read_written}_bytes_total
+        )
+        WHERE
+        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) GROUP BY tags, t2, t1
+    """
+    for (read_written) in ["read", "written"]])
+
 
 def parse_line(line):
     # parse the input line (Influx line protocol)
