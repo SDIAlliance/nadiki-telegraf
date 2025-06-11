@@ -6,8 +6,24 @@ import time
 import signal
 import json
 import pprint
+import re
+
+import boto3
+from botocore.exceptions import ClientError
 
 SOCKS_PROXY=os.environ.get("SOCKS_PROXY")
+
+# These should go to a config file
+COUNTRY_CODE = os.environ.get("TAG_COUNTRY_CODE")
+RACK_ID = os.environ.get("TAG_RACK_ID")
+FACILITY_ID = os.environ.get("TAG_FACILITY_ID")
+
+# fetch the mapping of instance IPs to our server IDs from secrets manager
+session = boto3.session.Session()
+client = session.client(service_name='secretsmanager')
+
+raw = client.get_secret_value(SecretId=os.environ.get("TAG_SERVER_ID_MAPPING_SECRETS_ARN"))["SecretString"]
+SERVER_IDS = json.loads(raw)
 
 last_timestamp = dict()
 
@@ -40,7 +56,20 @@ class VMQuery:
         metricname = data_point["metric"]["__name__"]
         del(data_point["metric"]["__name__"])
 
-        tag_string = ",".join([f"{k}={data_point['metric'][k]}" for k in data_point["metric"]])
+
+        server_id = "unknown_server"
+        try:
+            server_id = SERVER_IDS[data_point['metric']['instance']]
+        except KeyError as e:
+            print(f"unknown instance {data_point['metric']['instance']}", file=sys.stderr)
+
+        tag_string = ",".join([f"{k}={data_point['metric'][k]}" for k in data_point["metric"]] \
+            + [ \
+                f"server_id={server_id}", \
+                f"rack_id={RACK_ID}", \
+                f"country_code={COUNTRY_CODE}", \
+                f"facility_id={FACILITY_ID}"]) # add tags required according to Nadiki spec
+
         field_string = f"value={data_point['values'][0]}"
         return f"{metricname},{tag_string} {field_string} {timestamp}000000"
 
