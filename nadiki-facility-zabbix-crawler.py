@@ -1,66 +1,98 @@
+"""
+
+Telegraf execd input to crawl Zabbix
+
+This script can be run from telegraf as an execd
+plugin. It will run forever and output data when
+receiving a SIGHUP. This script is part of the Nadiki project
+(https://www.ier.uni-stuttgart.de/forschung/projekte/aktuell/nadiki/)
+and is geared towards the requirements in this project.
+
+The configuration is done with envitonment variables:
+
+- ZABBIX_URL must contain the URL of a Zabbix instance.
+- ZABBIX_USERNAME and ZABBIX_PASSWORD must contain username and password
+  for Zabbix. These will be used for HTTP basic auth and for logging into Zabbix.
+- DC_PREFIX is used as a prefix for the Zabbix metric names
+- NADIKI_HOST is the host inside Zabbix which contains the metrics relevant for us.
+
+The global dict METRIC_MAP describes which output metrics are generated from which
+Zabbix metrics. The keys are names of fields in the output (the measurement name
+is always "facility"). The value is again a dictionary with these keys:
+
+- `zabbix_key` is the name of the key in Zabbix
+- `diff` is a bool stating whether to calculate differenes between consecutive values
+- `rate` is a bool stating whether to divide each value by the fraction of an hour betwee the data points
+
+"""
 import requests
 from requests.auth import HTTPBasicAuth
-import os
+import os, sys
+import signal
+import time
 
 ZABBIX_URL      = os.environ.get("ZABBIX_URL")
 ZABBIX_USERNAME = os.environ.get("ZABBIX_USERNAME")
 ZABBIX_PASSWORD = os.environ.get("ZABBIX_PASSWORD")
 DC_PREFIX       = os.environ.get("SEVERIUS_DC_PREFIX")
+NADIKI_HOST     = os.environ.get("NADIKI_HOST", "EDS-NADIKI")
+#JOULES_PER_KWH = 3600000
 
-JOULES_PER_KWH = 3600000
-
-# Map the value names that we want to lambdas which calculate the value from Zabbix items.
-# In item_dict, the [0] entry is the value and [1] is the timestamp.
-#
-# FIXME: try to reduce reduncancy in this section
 METRIC_MAP = {
-    "heatpump_power_consumption_joules": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_Heat_Pump_Power_Wh"][0])*JOULES_PER_KWH,
-        item_dict[f"{dc_prefix}_Heat_Pump_Power_Wh"][1]
-    ),
-    "office_energy_use_joules": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_Office_Power_Wh"][0])*JOULES_PER_KWH,
-        item_dict[f"{dc_prefix}_Office_Power_Wh"][1]
-    ),
-    #"dc_water_usage_cubic_meters": lambda dc_prefix, item_dict: { },
-    #"office_water_usage_cubic_meters": lambda dc_prefix, item_dict: { },
-    "total_generator_energy_joules": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_Generators_Power_Wh"][0])*JOULES_PER_KWH,
-        item_dict[f"{dc_prefix}_Generators_Power_Wh"][1]
-    ),
-    #"generator_load_factor_ratio": lambda dc_prefix, item_dict: { },
-    "grid_transformers_energy_joules": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_Total_Grid_Power_Wh"][0])*JOULES_PER_KWH,
-        item_dict[f"{dc_prefix}_Total_Grid_Power_Wh"][1]
-    ),
-    "onsite_renewable_energy_joules": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_Power_PV_Wh"][0])*JOULES_PER_KWH,
-        item_dict[f"{dc_prefix}_Power_PV_Wh"][1]
-    ),
-    "it_power_usage_level1_joules": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_Total_IT_Power_Basic_Res_Wh"][0])*JOULES_PER_KWH,
-        item_dict[f"{dc_prefix}_Total_IT_Power_Basic_Res_Wh"][1]
-    ),
-    "it_power_usage_level2_joules": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_Total_IT_Power_Intermediate_Res_Wh"][0])*JOULES_PER_KWH,
-        item_dict[f"{dc_prefix}_Total_IT_Power_Intermediate_Res_Wh"][1]
-    ),
-    #"renewable_energy_certificates_joules": lambda dc_prefix, item_dict: { },
-    #"grid_emission_factor_grams": lambda dc_prefix, item_dict: { },
-    #"backup_emission_factor_grams": lambda dc_prefix, item_dict: { },
-    #"electricity_source": lambda dc_prefix, item_dict: { },
-    "pue_1_ratio": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_PUE_Basic_Res"][0]),
-        item_dict[f"{dc_prefix}_PUE_Basic_Res"][1]
-    ),
-    "pue_2_ratio": lambda dc_prefix, item_dict: (
-        float(item_dict[f"{dc_prefix}_PUE_Intermediate_Res"][0]),
-        item_dict[f"{dc_prefix}_PUE_Intermediate_Res"][1]
-    )
+    "heatpump_avg_watts": {
+        "zabbix_key": f"{DC_PREFIX}_Heat_Pump_Power_Wh",
+        "diff": True,
+        "rate": True
+    },
+    "office_avg_watts": {
+        "zabbix_key": f"{DC_PREFIX}_Office_Power_Wh",
+        "diff": True,
+        "rate": True
+    },
+    "total_generator_avg_watts": {
+        "zabbix_key": f"{DC_PREFIX}_Generators_Power_Wh",
+        "diff": True,
+        "rate": True
+    },
+    "grid_transformers_avg_watts": {
+        "zabbix_key": f"{DC_PREFIX}_Total_Grid_Power_Wh",
+        "diff": True,
+        "rate": True
+    },
+    "onsite_renewable_energy_avg_watts": {
+        "zabbix_key": f"{DC_PREFIX}_Power_PV_Wh",
+        "diff": True,
+        "rate": True
+    },
+    "it_power_usage_level1_avg_watts": {
+        "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Basic_Res_Wh",
+        "diff": True,
+        "rate": True
+    },
+    "it_power_usage_level2_avg_watts": {
+        "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Intermediate_Res_Wh",
+        "diff": True,
+        "rate": True
+    },
+    "pue_1_ratio": {
+        "zabbix_key": f"{DC_PREFIX}_PUE_Basic_Res",
+        "diff": False,
+        "rate": False
+    },
+    "pue_2_ratio": {
+        "zabbix_key": f"{DC_PREFIX}_PUE_Intermediate_Res",
+        "diff": False,
+        "rate": False
+    }
 }
 
 class ZabbixClient:
+    """
+    Generic client for the Zabbix API
 
+    The only assumption that we make here is that the same credentials are used for HTTP basic auth and 
+    for Zabbix itself.
+    """
     def __init__(self, url, username, password, basic_auth_username, basic_auth_password):
         self.url = url
         self.username = username
@@ -103,17 +135,42 @@ class ZabbixClient:
 #        response = self._zabbix_api_call("item.get", {"hostids": hostid, "itemids": itemid, "output": ["lastvalue"]}, self.auth_token)
 #        #print(response.json())
 
-if __name__ == "__main__":
-    clnt = ZabbixClient(ZABBIX_URL, ZABBIX_USERNAME, ZABBIX_PASSWORD, ZABBIX_USERNAME, ZABBIX_PASSWORD)
-    hostid = clnt.get_host_id_by_name("EDS-NADIKI")
+def signal_handler(signum, frame):
+    """
+    Signal handler which retrieves metrics from Zabbix and outputs
+    them. Since we do not know in which intervals Zabbix delivers new
+    data, we store the latest timestamp and value per metric and compare
+    them each time. This means that we can poll Zabbix every 30s without
+    creating duplicate data.
 
+    """
     r = clnt._zabbix_api_call("item.get", {"hostids": hostid, "output": ["key_", "lastclock", "lastvalue"]}, clnt.auth_token)
 
-    item_dict = { x["key_"]: (x["lastvalue"], x["lastclock"]) for x in r.json()["result"] }
-    for key, func in METRIC_MAP.items():
+    item_dict = { x["key_"]: (float(x["lastvalue"]), int(x["lastclock"])) for x in r.json()["result"] }
+    for key, desc in METRIC_MAP.items():
         try:
-            (value, clock) = func(DC_PREFIX, item_dict)
-            print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
-        except KeyError:
-            #print(f"Key {key} not found")
+            (value, clock) = item_dict[desc["zabbix_key"]]
+            # Skip data points that we've already seen
+            if previous_metric.get(key) != None:
+                if previous_metric.get(key).get("clock") == clock:
+                    #print(f"I! skipping {key} {value} {clock}", file=sys.stderr)
+                    continue # prevent duplicates
+                if desc["diff"]:
+                    value -= previous_metric[key]["value"]
+                if desc["rate"]:
+                    value /= (clock - previous_metric[key]["clock"])/3600
+            if previous_metric.get(key) or (desc["diff"] == False and desc["rate"] == False):
+                print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
+            previous_metric[key] = { "clock": clock, "value": value }
+        except KeyError as e:
+            print(e, file=sys.stderr)
             pass
+
+if __name__ == "__main__":
+    clnt = ZabbixClient(ZABBIX_URL, ZABBIX_USERNAME, ZABBIX_PASSWORD, ZABBIX_USERNAME, ZABBIX_PASSWORD)
+    hostid = clnt.get_host_id_by_name(NADIKI_HOST)
+    signal.signal(signal.SIGHUP, signal_handler)
+    # this hash will store the latest timestamps and values per metric
+    previous_metric = {}
+    while True:
+        time.sleep(3600)
