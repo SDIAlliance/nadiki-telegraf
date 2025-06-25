@@ -32,4 +32,4 @@ def apply(metric):
             log.info("last tags = {}".format(last_metric.tags))
         result.fields[f] = (metric.fields[f] - last_metric.fields[f]) / divisor
   state[key] = deepcopy(metric)
-  return [result]
+  return [result] if result != None else None
