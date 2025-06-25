@@ -41,48 +41,48 @@ NADIKI_HOST     = os.environ.get("NADIKI_HOST", "EDS-NADIKI")
 METRIC_MAP = {
     "heatpump_avg_watts": {
         "zabbix_key": f"{DC_PREFIX}_Heat_Pump_Power_Wh",
-        "diff": True,
-        "rate": True
+#        "diff": True,
+#        "rate": True
     },
     "office_avg_watts": {
         "zabbix_key": f"{DC_PREFIX}_Office_Power_Wh",
-        "diff": True,
-        "rate": True
+#        "diff": True,
+#        "rate": True
     },
     "total_generator_avg_watts": {
         "zabbix_key": f"{DC_PREFIX}_Generators_Power_Wh",
-        "diff": True,
-        "rate": True
+#        "diff": True,
+#        "rate": True
     },
     "grid_transformers_avg_watts": {
         "zabbix_key": f"{DC_PREFIX}_Total_Grid_Power_Wh",
-        "diff": True,
-        "rate": True
+#        "diff": True,
+#        "rate": True
     },
     "onsite_renewable_energy_avg_watts": {
         "zabbix_key": f"{DC_PREFIX}_Power_PV_Wh",
-        "diff": True,
-        "rate": True
+#        "diff": True,
+#        "rate": True
     },
     "it_power_usage_level1_avg_watts": {
         "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Basic_Res_Wh",
-        "diff": True,
-        "rate": True
+#        "diff": True,
+#        "rate": True
     },
     "it_power_usage_level2_avg_watts": {
         "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Intermediate_Res_Wh",
-        "diff": True,
-        "rate": True
+#        "diff": True,
+#        "rate": True
     },
     "pue_1_ratio": {
         "zabbix_key": f"{DC_PREFIX}_PUE_Basic_Res",
-        "diff": False,
-        "rate": False
+#        "diff": False,
+#        "rate": False
     },
     "pue_2_ratio": {
         "zabbix_key": f"{DC_PREFIX}_PUE_Intermediate_Res",
-        "diff": False,
-        "rate": False
+#        "diff": False,
+#        "rate": False
     }
 }
 
@@ -150,18 +150,19 @@ def signal_handler(signum, frame):
     for key, desc in METRIC_MAP.items():
         try:
             (value, clock) = item_dict[desc["zabbix_key"]]
-            # Skip data points that we've already seen
-            if previous_metric.get(key) != None:
-                if previous_metric.get(key).get("clock") == clock:
-                    #print(f"I! skipping {key} {value} {clock}", file=sys.stderr)
-                    continue # prevent duplicates
-                if desc["diff"]:
-                    value -= previous_metric[key]["value"]
-                if desc["rate"]:
-                    value /= (clock - previous_metric[key]["clock"])/3600
-            if previous_metric.get(key) or (desc["diff"] == False and desc["rate"] == False):
-                print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
-            previous_metric[key] = { "clock": clock, "value": value }
+            print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
+#            # Skip data points that we've already seen
+#            if previous_metric.get(key) != None:
+#                if previous_metric.get(key).get("clock") == clock:
+#                    #print(f"I! skipping {key} {value} {clock}", file=sys.stderr)
+#                    continue # prevent duplicates
+#                if desc["diff"]:
+#                    value -= previous_metric[key]["value"]
+#                if desc["rate"]:
+#                    value /= (clock - previous_metric[key]["clock"])/3600
+#            if previous_metric.get(key) or (desc["diff"] == False and desc["rate"] == False):
+#                print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
+#            previous_metric[key] = { "clock": clock, "value": value }
         except KeyError as e:
             print(e, file=sys.stderr)
             pass
