@@ -155,18 +155,7 @@ def signal_handler(signum, frame):
                 if previous_metric.get(key).get("clock") == clock:
                     continue
             print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
-#            # Skip data points that we've already seen
-#            if previous_metric.get(key) != None:
-#                if previous_metric.get(key).get("clock") == clock:
-#                    #print(f"I! skipping {key} {value} {clock}", file=sys.stderr)
-#                    continue # prevent duplicates
-#                if desc["diff"]:
-#                    value -= previous_metric[key]["value"]
-#                if desc["rate"]:
-#                    value /= (clock - previous_metric[key]["clock"])/3600
-#            if previous_metric.get(key) or (desc["diff"] == False and desc["rate"] == False):
-#                print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
-#            previous_metric[key] = { "clock": clock, "value": value }
+            previous_metric[key] = { "clock": clock, "value": value }
         except KeyError as e:
             print(e, file=sys.stderr)
             pass
