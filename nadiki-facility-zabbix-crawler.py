@@ -150,6 +150,10 @@ def signal_handler(signum, frame):
     for key, desc in METRIC_MAP.items():
         try:
             (value, clock) = item_dict[desc["zabbix_key"]]
+            # Skip data points that we've already seen
+            if previous_metric.get(key) != None:
+                if previous_metric.get(key).get("clock") == clock:
+                    continue
             print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
 #            # Skip data points that we've already seen
 #            if previous_metric.get(key) != None:
