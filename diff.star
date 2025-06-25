@@ -17,7 +17,7 @@
 load("logging.star", "log")
 #load("json.star", "json")
 def apply(metric):
-  key = "-".join([metric.tags[x] for x in KEY_TAGS])
+  key = "-".join([metric.measurement] + [metric.tags[x] for x in KEY_TAGS])
   last_metric = state.get(key)
   result = None
   if last_metric != None:
