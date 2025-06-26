@@ -154,7 +154,7 @@ def signal_handler(signum, frame):
             if previous_metric.get(key) != None:
                 if previous_metric.get(key).get("clock") == clock:
                     continue
-            print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
+            print(f"{key},country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
             previous_metric[key] = { "clock": clock, "value": value }
         except KeyError as e:
             print(e, file=sys.stderr)

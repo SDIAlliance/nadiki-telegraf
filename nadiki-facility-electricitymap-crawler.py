@@ -22,7 +22,7 @@ def fetch_electricity_data() -> list:
 
 def print_em_history_as_influx_data(history):
     for item in history:
-        print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} grid_emission_factor_grams={item['carbonIntensity']} {int(dateutil.parser.parse(item['datetime']).timestamp())*10**9}")
+        print(f"electricitymap,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} grid_emission_factor_grams={item['carbonIntensity']} {int(dateutil.parser.parse(item['datetime']).timestamp())*10**9}")
 
 if __name__ == "__main__":
     print_em_history_as_influx_data(fetch_electricity_data())
