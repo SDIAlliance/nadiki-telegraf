@@ -15,6 +15,9 @@ import os
 from proton_driver import client
 import datetime
 import itertools
+import setproctitle
+
+from multiprocessing import Process, Lock
 
 PROTON_INGEST_URL = f"http://{os.environ.get('PROTON_HOST')}:3218/proton/v1/ingest/streams/"
 
@@ -48,22 +51,22 @@ QUERIES = [
         WHERE
         (t1 != t2) AND (date_diff('s', t2, t1) < 86400)
     """,
-    # Calculate fraction of time (between 0 and 1) in which CPU cores were non-idle
-    """
-        SELECT
-        'server', tags, map_cast(['cpu_not_idle_fraction'], [sum(seconds-last_seconds)/date_diff('s', t2, t1)]) as fields, to_unix_timestamp64_nano(t1)
-        FROM
-        (
-            SELECT
-            tags, to_float(fields['value']) as seconds, lag(to_float(fields['value'])) over (partition by instance, cpu, mode) as last_seconds, _tp_time as t1, lag(_tp_time) over (partition by instance, cpu, mode) as t2
-            FROM
-            node_cpu_seconds_total
-            WHERE
-            mode != 'idle'
-        )
-        WHERE
-        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) GROUP BY tags, t2, t1
-    """
+#    # Calculate fraction of time (between 0 and 1) in which CPU cores were non-idle
+#    """
+#        SELECT
+#        'server', tags, map_cast(['cpu_not_idle_fraction'], [sum(seconds-last_seconds)/date_diff('s', t2, t1)]) as fields, to_unix_timestamp64_nano(t1)
+#        FROM
+#        (
+#            SELECT
+#            tags, to_float(fields['value']) as seconds, lag(to_float(fields['value'])) over (partition by instance, cpu, mode) as last_seconds, _tp_time as t1, lag(_tp_time) over (partition by instance, cpu, mode) as t2
+#            FROM
+#            node_cpu_seconds_total
+#            WHERE
+#            mode != 'idle'
+#        )
+#        WHERE
+#        (t1 != t2) AND (date_diff('s', t2, t1) < 86400) GROUP BY tags, t2, t1
+#    """
 ]
 
 # generate queries which are very similar (network and disk)
@@ -152,6 +155,21 @@ def dump_metrics(a,b):
             data[k] = []
     signal.alarm(1)
 
+def handle_query(q, lock):
+    # child process queries proton and outputs metrics
+    setproctitle.setproctitle(q)
+    c = client.Client(host=os.environ.get('PROTON_HOST'), port=8463)
+    rows = c.execute_iter(q)
+    for row in rows:
+        (measurement, tags, fields, timestamp) = row
+        tag_strings = [f"{tagname}={tags[tagname]}" for tagname in tags.keys()]
+        field_strings = [f"{fieldname}={fields[fieldname]}" for fieldname in fields.keys()]
+        lock.acquire()
+        print(f"{measurement},{','.join(tag_strings)} {'.'.join(field_strings)} {timestamp}")
+        lock.release()
+        #print(row, file=sys.stderr)
+        ## this never terminates
+
 if __name__ == "__main__":
     # create the streams
     c = client.Client(host=os.environ.get('PROTON_HOST'), port=8463)
@@ -165,18 +183,10 @@ if __name__ == "__main__":
         c.execute(create_stmt)
 
     # fork one child per query
+    lock = Lock()
     for q in QUERIES:
-        if os.fork() > 0:
-            # child process queries proton and outputs metrics
-            c = client.Client(host=os.environ.get('PROTON_HOST'), port=8463)
-            rows = c.execute_iter(q)
-            for row in rows:
-                (measurement, tags, fields, timestamp) = row
-                tag_strings = [f"{tagname}={tags[tagname]}" for tagname in tags.keys()]
-                field_strings = [f"{fieldname}={fields[fieldname]}" for fieldname in fields.keys()]
-                print(f"{measurement},{','.join(tag_strings)} {'.'.join(field_strings)} {timestamp}")
-                #print(row, file=sys.stderr)
-                ## this never terminates
+        Process(target=handle_query, args=(q, lock)).start()
+
 
     # parent process does the ingestion into proton
     signal.signal(signal.SIGALRM, dump_metrics)

@@ -40,47 +40,47 @@ NADIKI_HOST     = os.environ.get("NADIKI_HOST", "EDS-NADIKI")
 
 METRIC_MAP = {
     "heatpump_avg_watts": {
-        "zabbix_key": f"{DC_PREFIX}_Heat_Pump_Power_Wh",
+        "zabbix_key": f"{DC_PREFIX}_Heat_Pump_Power", #NL3_Heat_Pump_Power
 #        "diff": True,
 #        "rate": True
     },
     "office_avg_watts": {
-        "zabbix_key": f"{DC_PREFIX}_Office_Power_Wh",
+        "zabbix_key": f"{DC_PREFIX}_Office_Power", #NL3_Office_Power
 #        "diff": True,
 #        "rate": True
     },
     "total_generator_avg_watts": {
-        "zabbix_key": f"{DC_PREFIX}_Generators_Power_Wh",
+        "zabbix_key": f"{DC_PREFIX}_Generators_Power", #NL3_Generators_Power
 #        "diff": True,
 #        "rate": True
     },
     "grid_transformers_avg_watts": {
-        "zabbix_key": f"{DC_PREFIX}_Total_Grid_Power_Wh",
+        "zabbix_key": f"{DC_PREFIX}_Total_Grid_Power", #NL3_Total_Grid_Power
 #        "diff": True,
 #        "rate": True
     },
     "onsite_renewable_energy_avg_watts": {
-        "zabbix_key": f"{DC_PREFIX}_Power_PV_Wh",
+        "zabbix_key": f"{DC_PREFIX}_Power_PV", #NL3_Power_PV
 #        "diff": True,
 #        "rate": True
     },
     "it_power_usage_level1_avg_watts": {
-        "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Basic_Res_Wh",
+        "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Basic_Res", #NL3_Total_IT_Power_Basic_Res
 #        "diff": True,
 #        "rate": True
     },
     "it_power_usage_level2_avg_watts": {
-        "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Intermediate_Res_Wh",
+        "zabbix_key": f"{DC_PREFIX}_Total_IT_Power_Intermediate_Res", #NL3_Total_IT_Power_Intermediate_Res
 #        "diff": True,
 #        "rate": True
     },
     "pue_1_ratio": {
-        "zabbix_key": f"{DC_PREFIX}_PUE_Basic_Res",
+        "zabbix_key": f"{DC_PREFIX}_PUE_Basic_Res", #NL3_PUE_Basic_Res
 #        "diff": False,
 #        "rate": False
     },
     "pue_2_ratio": {
-        "zabbix_key": f"{DC_PREFIX}_PUE_Intermediate_Res",
+        "zabbix_key": f"{DC_PREFIX}_PUE_Intermediate_Res", #NL3_PUE_Intermediate_Res
 #        "diff": False,
 #        "rate": False
     }
@@ -154,7 +154,7 @@ def signal_handler(signum, frame):
             if previous_metric.get(key) != None:
                 if previous_metric.get(key).get("clock") == clock:
                     continue
-            print(f"{key},country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
+            print(f"facility,country_code={os.environ.get('TAG_COUNTRY_CODE')},facility_id={os.environ.get('TAG_FACILITY_ID')} {key}={value} {int(clock)*10**9}")
             previous_metric[key] = { "clock": clock, "value": value }
         except KeyError as e:
             print(e, file=sys.stderr)
