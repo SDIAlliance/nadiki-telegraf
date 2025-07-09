@@ -12,6 +12,8 @@
 ## - CALCULATE_RATIO: if set to "true", the resulting difference
 ##   will also be devided by the elapsed seconds since the last data
 ##   point for the same key.
+## - INVERT: if set to "true", the metric will be subtracted from 1.
+##   This allows us to calculate the CPU activite by using 1-idle.
 ##
 
 load("logging.star", "log")
@@ -30,6 +32,9 @@ def apply(metric):
             log.info("Divisor is 0 between these two metrics (maybe your key is not unique?):")
             log.info("this tags = {}".format(metric.tags))
             log.info("last tags = {}".format(last_metric.tags))
-        result.fields[f] = (metric.fields[f] - last_metric.fields[f]) / divisor
+        if INVERT:
+          result.fields[f] = 1 - (metric.fields[f] - last_metric.fields[f]) / divisor
+        else:
+          result.fields[f] = (metric.fields[f] - last_metric.fields[f]) / divisor
   state[key] = deepcopy(metric)
   return [result] if result != None else None
