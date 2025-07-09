@@ -4,7 +4,7 @@ COPY requirements.txt .
 RUN apt update && apt install -y python3 python3-pip python3-venv python3-requests
 RUN python3 -mvenv .
 RUN bash -c "source bin/activate && pip install -r requirements.txt"
-COPY nadiki-telegraf-to-proton-ingester.py nadiki-victoriametrics-crawler.py .
-COPY telegraf_vm2proton.conf /etc/telegraf/telegraf.conf
+COPY diff.star nadiki-victoriametrics-crawler.py .
+COPY telegraf_xion.conf /etc/telegraf/telegraf.conf
 #USER telegraf
 CMD ["bash", "-c", "source bin/activate && /usr/bin/telegraf"]
