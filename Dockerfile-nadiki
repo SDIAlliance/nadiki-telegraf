@@ -12,7 +12,7 @@ RUN curl --silent --location -O \
 RUN apt update && apt install telegraf
 RUN mkdir /nadiki
 WORKDIR /nadiki
-COPY requirements.txt telegraf.conf nadiki-facility-electricitymap-crawler.py nadiki-facility-zabbix-crawler.py diff.star .
+COPY requirements-nadiki.txt telegraf.conf nadiki-facility-electricitymap-crawler.py nadiki-facility-zabbix-crawler.py diff.star .
 RUN python3 -mvenv .
-RUN bash -c "source bin/activate && pip3 install -r requirements.txt"
+RUN bash -c "source bin/activate && pip3 install -r requirements-nadiki.txt"
 CMD ["bash", "-c", "source bin/activate && /usr/bin/telegraf --config telegraf.conf"]
