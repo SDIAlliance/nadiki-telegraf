@@ -23,15 +23,17 @@ FACILITY_ID = os.environ.get("TAG_FACILITY_ID")
 # accordingly in the env variable VM_TIMEZONE.
 VM_TIMEZONE = pytz.timezone(os.environ.get("VM_TIMEZONE") or "UTC")
 
-# fetch the mapping of instance IPs to our server IDs from secrets manager
-session = boto3.session.Session()
-my_config = Config(
-    region_name = os.environ.get("AWS_REGION") # Why do we need this?
-)
-client = session.client(service_name='secretsmanager', config=my_config)
+## fetch the mapping of instance IPs to our server IDs from secrets manager
+#session = boto3.session.Session()
+#my_config = Config(
+#    region_name = os.environ.get("AWS_REGION") # Why do we need this?
+#)
+#client = session.client(service_name='secretsmanager', config=my_config)
+#
+#raw = client.get_secret_value(SecretId=os.environ.get("TAG_SERVER_ID_MAPPING_SECRETS_ARN"))["SecretString"]
+#SERVER_IDS = json.loads(raw)
 
-raw = client.get_secret_value(SecretId=os.environ.get("TAG_SERVER_ID_MAPPING_SECRETS_ARN"))["SecretString"]
-SERVER_IDS = json.loads(raw)
+SERVER_IDS = json.loads(open(os.environ.get("SERVER_ID_MAPPING_FILE")).read())
 
 last_timestamp = dict()
 
